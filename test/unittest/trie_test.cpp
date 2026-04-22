@@ -94,6 +94,18 @@ TEST(DictTrieTest, UserDictWithMaxWeight) {
   ASSERT_NEAR(unit->weight, -2.975, 0.001);
 }
 
+TEST(DictTrieTest, LoadUserDictRebuildsTrie) {
+  DictTrie trie(DICT_FILE);
+  cppjieba::RuneStrArray unicode;
+  ASSERT_TRUE(DecodeUTF8RunesInString("云计算", unicode));
+  ASSERT_TRUE(trie.Find(unicode.begin(), unicode.end()) == NULL);
+
+  trie.LoadUserDict(TEST_DATA_DIR "/userdict.utf8");
+  const DictUnit* unit = trie.Find(unicode.begin(), unicode.end());
+  ASSERT_TRUE(unit != NULL);
+  ASSERT_NEAR(unit->weight, -14.100, 0.001);
+}
+
 TEST(DictTrieTest, Dag) {
   DictTrie trie(DICT_FILE, TEST_DATA_DIR "/userdict.utf8");
 

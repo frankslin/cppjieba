@@ -2,7 +2,10 @@
 #define CPPJIEBA_TRIE_HPP
 
 #include <vector>
-#include <queue>
+#include <algorithm>
+#include <string>
+#include <utility>
+#include "darts.h"
 #include "Utils.hpp"
 #include "Unicode.hpp"
 
@@ -38,136 +41,106 @@ struct Dag {
 
 typedef Rune TrieKey;
 
-class TrieNode {
- public :
-  TrieNode(): next(NULL), ptValue(NULL) {
-  }
- public:
-  typedef unordered_map<TrieKey, TrieNode*> NextMap;
-  NextMap *next;
-  const DictUnit *ptValue;
-};
-
 class Trie {
  public:
   Trie(const vector<Unicode>& keys, const vector<const DictUnit*>& valuePointers)
-   : root_(new TrieNode) {
+      : value_pointers_(valuePointers) {
     CreateTrie(keys, valuePointers);
   }
   ~Trie() {
-    DeleteNode(root_);
   }
 
   const DictUnit* Find(RuneStrArray::const_iterator begin, RuneStrArray::const_iterator end) const {
     if (begin == end) {
       return NULL;
     }
-
-    const TrieNode* ptNode = root_;
-    TrieNode::NextMap::const_iterator citer;
-    for (RuneStrArray::const_iterator it = begin; it != end; it++) {
-      if (NULL == ptNode->next) {
-        return NULL;
-      }
-      citer = ptNode->next->find(it->rune);
-      if (ptNode->next->end() == citer) {
-        return NULL;
-      }
-      ptNode = citer->second;
+    if (encoded_keys_.empty()) {
+      return NULL;
     }
-    return ptNode->ptValue;
+    const string encoded = EncodeRunes(begin, end);
+    const int result = darts_.exactMatchSearch<int>(encoded.data(), encoded.size());
+    if (result < 0 || static_cast<size_t>(result) >= value_pointers_.size()) {
+      return NULL;
+    }
+    return value_pointers_[result];
   }
 
   void Find(RuneStrArray::const_iterator begin, 
         RuneStrArray::const_iterator end, 
         vector<struct Dag>&res, 
         size_t max_word_len = MAX_WORD_LENGTH) const {
-    assert(root_ != NULL);
     res.resize(end - begin);
+    if (begin == end) {
+      return;
+    }
 
-    const TrieNode *ptNode = NULL;
-    TrieNode::NextMap::const_iterator citer;
     for (size_t i = 0; i < size_t(end - begin); i++) {
       res[i].runestr = *(begin + i);
+      res[i].nexts.clear();
 
-      if (root_->next != NULL && root_->next->end() != (citer = root_->next->find(res[i].runestr.rune))) {
-        ptNode = citer->second;
-      } else {
-        ptNode = NULL;
+      const size_t rune_count = std::min(static_cast<size_t>(end - begin - i), max_word_len);
+      if (rune_count == 0 || encoded_keys_.empty()) {
+        res[i].nexts.push_back(pair<size_t, const DictUnit*>(i, static_cast<const DictUnit*>(NULL)));
+        continue;
       }
-      if (ptNode != NULL) {
-        res[i].nexts.push_back(pair<size_t, const DictUnit*>(i, ptNode->ptValue));
-      } else {
+
+      string encoded;
+      encoded.reserve(rune_count * 3);
+      vector<size_t> rune_end_offsets;
+      rune_end_offsets.reserve(rune_count);
+      for (size_t j = 0; j < rune_count; ++j) {
+        AppendRune(encoded, (begin + i + j)->rune);
+        rune_end_offsets.push_back(encoded.size());
+      }
+
+      const Darts::DoubleArray::result_pair_type empty_result = {-1, 0};
+      vector<Darts::DoubleArray::result_pair_type> matches(rune_count, empty_result);
+      const size_t match_count = darts_.commonPrefixSearch(
+          encoded.data(),
+          matches.data(),
+          matches.size(),
+          encoded.size());
+
+      bool has_self = false;
+      vector<pair<size_t, const DictUnit*> > nexts;
+      nexts.reserve(match_count > 0 ? match_count : 1);
+      for (size_t k = 0; k < match_count && k < matches.size(); ++k) {
+        const Darts::DoubleArray::result_pair_type& match = matches[k];
+        if (match.value < 0 || match.length == 0) {
+          continue;
+        }
+        vector<size_t>::const_iterator length_it =
+            std::lower_bound(rune_end_offsets.begin(), rune_end_offsets.end(), match.length);
+        if (length_it == rune_end_offsets.end() || *length_it != match.length) {
+          continue;
+        }
+        const size_t j = i + static_cast<size_t>(length_it - rune_end_offsets.begin());
+        if (j >= size_t(end - begin) || static_cast<size_t>(match.value) >= value_pointers_.size()) {
+          continue;
+        }
+        nexts.push_back(pair<size_t, const DictUnit*>(j, value_pointers_[match.value]));
+        if (j == i) {
+          has_self = true;
+        }
+      }
+
+      if (!has_self) {
         res[i].nexts.push_back(pair<size_t, const DictUnit*>(i, static_cast<const DictUnit*>(NULL)));
       }
-
-      for (size_t j = i + 1; j < size_t(end - begin) && (j - i + 1) <= max_word_len; j++) {
-        if (ptNode == NULL || ptNode->next == NULL) {
-          break;
-        }
-        citer = ptNode->next->find((begin + j)->rune);
-        if (ptNode->next->end() == citer) {
-          break;
-        }
-        ptNode = citer->second;
-        if (NULL != ptNode->ptValue) {
-          res[i].nexts.push_back(pair<size_t, const DictUnit*>(j, ptNode->ptValue));
-        }
+      for (size_t k = 0; k < nexts.size(); ++k) {
+        res[i].nexts.push_back(nexts[k]);
       }
     }
   }
 
   void InsertNode(const Unicode& key, const DictUnit* ptValue) {
-    if (key.begin() == key.end()) {
-      return;
-    }
-
-    TrieNode::NextMap::const_iterator kmIter;
-    TrieNode *ptNode = root_;
-    for (Unicode::const_iterator citer = key.begin(); citer != key.end(); ++citer) {
-      if (NULL == ptNode->next) {
-        ptNode->next = new TrieNode::NextMap;
-      }
-      kmIter = ptNode->next->find(*citer);
-      if (ptNode->next->end() == kmIter) {
-        TrieNode *nextNode = new TrieNode;
-
-        ptNode->next->insert(make_pair(*citer, nextNode));
-        ptNode = nextNode;
-      } else {
-        ptNode = kmIter->second;
-      }
-    }
-    assert(ptNode != NULL);
-    ptNode->ptValue = ptValue;
+    (void)key;
+    (void)ptValue;
   }
   void DeleteNode(const Unicode& key, const DictUnit* ptValue) {
-      if (key.begin() == key.end()) {
-        return;
-      }
-      //定义一个NextMap迭代器
-      TrieNode::NextMap::const_iterator kmIter;
-      //定义一个指向root的TrieNode指针
-      TrieNode *ptNode = root_;
-      for (Unicode::const_iterator citer = key.begin(); citer != key.end(); ++citer) {
-        //链表不存在元素
-        if (NULL == ptNode->next) {
-          return;
-        }
-        kmIter = ptNode->next->find(*citer);
-        //如果map中不存在,跳出循环
-        if (ptNode->next->end() == kmIter) {
-              break;
-        }
-        //从unordered_map中擦除该项
-        ptNode->next->erase(*citer);
-        //删除该node
-        ptNode = kmIter->second;
-        delete ptNode;
-        break;
-      }
-      return;
- }
+    (void)key;
+    (void)ptValue;
+  }
  private:
   void CreateTrie(const vector<Unicode>& keys, const vector<const DictUnit*>& valuePointers) {
     if (valuePointers.empty() || keys.empty()) {
@@ -175,25 +148,88 @@ class Trie {
     }
     assert(keys.size() == valuePointers.size());
 
+    vector<pair<string, int> > items;
+    items.reserve(keys.size());
     for (size_t i = 0; i < keys.size(); i++) {
-      InsertNode(keys[i], valuePointers[i]);
+      items.push_back(make_pair(EncodeUnicode(keys[i]), static_cast<int>(i)));
     }
-  }
+    std::sort(items.begin(), items.end());
 
-  void DeleteNode(TrieNode* node) {
-    if (NULL == node) {
-      return;
-    }
-    if (NULL != node->next) {
-      for (TrieNode::NextMap::iterator it = node->next->begin(); it != node->next->end(); ++it) {
-        DeleteNode(it->second);
+    encoded_keys_.clear();
+    key_ptrs_.clear();
+    key_lengths_.clear();
+    values_.clear();
+    encoded_keys_.reserve(items.size());
+    key_ptrs_.reserve(items.size());
+    key_lengths_.reserve(items.size());
+    values_.reserve(items.size());
+
+    string last_key;
+    for (size_t i = 0; i < items.size(); ++i) {
+      if (!encoded_keys_.empty() && items[i].first == last_key) {
+        continue;
       }
-      delete node->next;
+      encoded_keys_.push_back(items[i].first);
+      last_key = items[i].first;
+      values_.push_back(items[i].second);
     }
-    delete node;
+
+    for (size_t i = 0; i < encoded_keys_.size(); ++i) {
+      key_ptrs_.push_back(encoded_keys_[i].data());
+      key_lengths_.push_back(encoded_keys_[i].size());
+    }
+
+    if (!encoded_keys_.empty()) {
+      darts_.build(key_ptrs_.size(), key_ptrs_.data(), key_lengths_.data(), values_.data());
+    }
   }
 
-  TrieNode* root_;
+  static string EncodeUnicode(const Unicode& unicode) {
+    return EncodeRunes(unicode.begin(), unicode.end());
+  }
+
+  static string EncodeRunes(RuneStrArray::const_iterator begin, RuneStrArray::const_iterator end) {
+    string encoded;
+    encoded.reserve((end - begin) * 3);
+    for (RuneStrArray::const_iterator it = begin; it != end; ++it) {
+      AppendRune(encoded, it->rune);
+    }
+    return encoded;
+  }
+
+  static string EncodeRunes(Unicode::const_iterator begin, Unicode::const_iterator end) {
+    string encoded;
+    encoded.reserve((end - begin) * 3);
+    for (Unicode::const_iterator it = begin; it != end; ++it) {
+      AppendRune(encoded, *it);
+    }
+    return encoded;
+  }
+
+  static void AppendRune(string& encoded, Rune rune) {
+    if (rune <= 0x7F) {
+      encoded.push_back(static_cast<char>(rune));
+    } else if (rune <= 0x7FF) {
+      encoded.push_back(static_cast<char>(0xC0 | ((rune >> 6) & 0x1F)));
+      encoded.push_back(static_cast<char>(0x80 | (rune & 0x3F)));
+    } else if (rune <= 0xFFFF) {
+      encoded.push_back(static_cast<char>(0xE0 | ((rune >> 12) & 0x0F)));
+      encoded.push_back(static_cast<char>(0x80 | ((rune >> 6) & 0x3F)));
+      encoded.push_back(static_cast<char>(0x80 | (rune & 0x3F)));
+    } else {
+      encoded.push_back(static_cast<char>(0xF0 | ((rune >> 18) & 0x07)));
+      encoded.push_back(static_cast<char>(0x80 | ((rune >> 12) & 0x3F)));
+      encoded.push_back(static_cast<char>(0x80 | ((rune >> 6) & 0x3F)));
+      encoded.push_back(static_cast<char>(0x80 | (rune & 0x3F)));
+    }
+  }
+
+  Darts::DoubleArray darts_;
+  vector<const DictUnit*> value_pointers_;
+  vector<string> encoded_keys_;
+  vector<const char*> key_ptrs_;
+  vector<size_t> key_lengths_;
+  vector<int> values_;
 }; // class Trie
 } // namespace cppjieba
 

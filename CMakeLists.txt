@@ -1,7 +1,8 @@
 CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 PROJECT(CPPJIEBA)
 
-INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/include)
+INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/include
+  ${PROJECT_SOURCE_DIR}/deps/darts-clone/include)
 
 if(NOT DEFINED CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_STANDARD 11)
@@ -24,6 +25,7 @@ if(NOT TARGET cppjieba)
   add_library(cppjieba INTERFACE)
   target_include_directories(cppjieba INTERFACE
     ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/deps/darts-clone/include
   )
 endif()
 

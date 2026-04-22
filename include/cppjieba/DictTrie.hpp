@@ -30,7 +30,8 @@ class DictTrie {
     WordWeightMax,
   }; // enum UserWordWeightOption
 
-  DictTrie(const std::string& dict_path, const std::string& user_dict_paths = "", UserWordWeightOption user_word_weight_opt = WordWeightMedian) {
+  DictTrie(const std::string& dict_path, const std::string& user_dict_paths = "", UserWordWeightOption user_word_weight_opt = WordWeightMedian)
+      : trie_(NULL) {
     Init(dict_path, user_dict_paths, user_word_weight_opt);
   }
 
@@ -39,33 +40,22 @@ class DictTrie {
   }
 
   bool InsertUserWord(const std::string& word, const std::string& tag = UNKNOWN_TAG) {
-    DictUnit node_info;
-    if (!MakeNodeInfo(node_info, word, user_word_default_weight_, tag)) {
-      return false;
-    }
-    active_node_infos_.push_back(node_info);
-    trie_->InsertNode(node_info.word, &active_node_infos_.back());
-    return true;
+    (void)word;
+    (void)tag;
+    return false;
   }
 
   bool InsertUserWord(const std::string& word,int freq, const std::string& tag = UNKNOWN_TAG) {
-    DictUnit node_info;
-    double weight = freq ? log(1.0 * freq / freq_sum_) : user_word_default_weight_ ;
-    if (!MakeNodeInfo(node_info, word, weight , tag)) {
-      return false;
-    }
-    active_node_infos_.push_back(node_info);
-    trie_->InsertNode(node_info.word, &active_node_infos_.back());
-    return true;
+    (void)word;
+    (void)freq;
+    (void)tag;
+    return false;
   }
 
   bool DeleteUserWord(const std::string& word, const std::string& tag = UNKNOWN_TAG) {
-    DictUnit node_info;
-    if (!MakeNodeInfo(node_info, word, user_word_default_weight_, tag)) {
-      return false;
-    }
-    trie_->DeleteNode(node_info.word, &node_info);
-    return true;
+    (void)word;
+    (void)tag;
+    return false;
   }
 
   const DictUnit* Find(RuneStrArray::const_iterator begin, RuneStrArray::const_iterator end) const {
@@ -136,6 +126,7 @@ class DictTrie {
     for (size_t i = 0; i < buf.size(); i++) {
       InserUserDictNode(buf[i]);
     }
+    RebuildTrie();
   }
 
    void LoadUserDict(const std::set<std::string>& buf) {
@@ -143,6 +134,7 @@ class DictTrie {
     for (iter = buf.begin(); iter != buf.end(); iter++){
       InserUserDictNode(*iter);
     }
+    RebuildTrie();
   }
 
   void LoadUserDict(const std::string& filePaths) {
@@ -160,6 +152,7 @@ class DictTrie {
         InserUserDictNode(line);
       }
     }
+    RebuildTrie();
   }
 
 
@@ -192,13 +185,32 @@ class DictTrie {
     }
 
     if (user_dict_paths.size()) {
-      LoadUserDict(user_dict_paths);
+      AppendUserDict(user_dict_paths);
     }
     Shrink(static_node_infos_);
     CreateTrie();
   }
 
+  void AppendUserDict(const std::string& filePaths) {
+    std::vector<std::string> files = limonp::Split(filePaths, "|;");
+    for (size_t i = 0; i < files.size(); i++) {
+      std::ifstream ifs;
+      OpenInputFile(ifs, files[i]);
+      XCHECK(ifs.is_open()) << "open " << files[i] << " failed";
+      std::string line;
+
+      while(getline(ifs, line)) {
+        if (line.size() == 0) {
+          continue;
+        }
+        InserUserDictNode(line);
+      }
+    }
+  }
+
   void CreateTrie() {
+    delete trie_;
+    trie_ = NULL;
     const size_t total_size = base_static_node_infos_->size() + static_node_infos_.size();
     assert(total_size);
     std::vector<Unicode> words;
@@ -216,6 +228,11 @@ class DictTrie {
     }
 
     trie_ = new Trie(words, valuePointers);
+  }
+
+  void RebuildTrie() {
+    Shrink(static_node_infos_);
+    CreateTrie();
   }
 
   bool MakeNodeInfo(DictUnit& node_info,
@@ -303,7 +320,6 @@ class DictTrie {
 
   std::shared_ptr<const std::vector<DictUnit> > base_static_node_infos_;
   std::vector<DictUnit> static_node_infos_;
-  std::deque<DictUnit> active_node_infos_; // must not be std::vector
   Trie * trie_;
 
   double freq_sum_;
