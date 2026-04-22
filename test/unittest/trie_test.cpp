@@ -84,6 +84,32 @@ TEST(DictTrieTest, UserDict) {
   ASSERT_NEAR(unit->weight, -15.6478, 0.001);
 }
 
+TEST(DictTrieTest, LoadMergedOcd2) {
+  DictTrie trie(MERGED_DICT_FILE);
+  cppjieba::RuneStrArray unicode;
+
+  ASSERT_TRUE(DecodeUTF8RunesInString("来到", unicode));
+  const DictUnit* unit = trie.Find(unicode.begin(), unicode.end());
+  ASSERT_TRUE(unit != NULL);
+  ASSERT_EQ("v", unit->tag);
+  ASSERT_NEAR(-8.870, unit->weight, 0.001);
+
+  ASSERT_TRUE(DecodeUTF8RunesInString("云计算", unicode));
+  unit = trie.Find(unicode.begin(), unicode.end());
+  ASSERT_TRUE(unit != NULL);
+  ASSERT_NEAR(-14.100, unit->weight, 0.001);
+
+  ASSERT_TRUE(DecodeUTF8RunesInString("蓝翔", unicode));
+  unit = trie.Find(unicode.begin(), unicode.end());
+  ASSERT_TRUE(unit != NULL);
+  ASSERT_EQ("nz", unit->tag);
+  ASSERT_NEAR(-14.100, unit->weight, 0.001);
+
+  ASSERT_TRUE(DecodeUTF8RunesInString("A", unicode));
+  ASSERT_EQ(1u, unicode.size());
+  ASSERT_TRUE(trie.IsUserDictSingleChineseWord(unicode[0].rune));
+}
+
 TEST(DictTrieTest, UserDictWithMaxWeight) {
   DictTrie trie(DICT_FILE, TEST_DATA_DIR "/userdict.utf8", DictTrie::WordWeightMax);
   string word = "云计算";

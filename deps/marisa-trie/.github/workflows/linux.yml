@@ -1,0 +1,112 @@
+name: Linux CI
+
+on:
+  push:
+    branches: [master, develop]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+  pull_request:
+    types: [opened, synchronize]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cmake:
+    name: CMake - ${{ matrix.runs-on }} - ${{ matrix.name }}
+
+    strategy:
+      matrix:
+        runs-on:
+          - ubuntu-22.04
+          - ubuntu-latest
+        include:
+          - compiler: gcc
+            name: GCC
+            coverage: true
+          - compiler: clang
+            name: Clang
+            coverage: false
+
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Install Dependencies
+        if: matrix.coverage
+        run: sudo apt install lcov
+
+      - name: Setup Compiler
+        run: |
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then
+            echo "CC=gcc" >> $GITHUB_ENV
+            echo "CXX=g++" >> $GITHUB_ENV
+          else
+            echo "CC=clang" >> $GITHUB_ENV
+            echo "CXX=clang++" >> $GITHUB_ENV
+          fi
+
+      - name: Build in Release Mode
+        continue-on-error: true
+        run: |
+          cmake -S . -B build-release -DENABLE_NATIVE_CODE=ON
+          cmake --build build-release -j $(getconf _NPROCESSORS_ONLN)
+
+      - name: Build in Debug Mode
+        run: |
+          cmake -S. -B build-debug \
+            -DENABLE_NATIVE_CODE=ON \
+            -DENABLE_ASAN=ON \
+            -DENABLE_UBSAN=ON \
+            -DCMAKE_CXX_CLANG_TIDY=clang-tidy \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=On \
+            $([ "${{ matrix.coverage }}" = "true" ] && echo "-DENABLE_COVERAGE=ON")
+          cmake --build build-debug -j $(getconf _NPROCESSORS_ONLN)
+
+      - name: Build SWIG Bindings
+        run: |
+          make -C bindings
+
+      - name: Build Python3 Binding
+        run: |
+          cd bindings/python3
+          CFLAGS="-std=c++17" python3 setup.py build_ext --include-dirs=../../include --library-dirs=../../build-debug
+          python3 setup.py build
+
+      - name: Build Perl Binding
+        run: |
+          cd bindings/perl
+          perl Makefile.PL CC=$CC CCFLAGS="-std=c++17" INC=-I"../../include" LIBS=-L"../../build-debug" INSTALLDIRS=vendor
+          make
+
+      - name: Build Ruby Binding
+        run: |
+          cd bindings/ruby
+          ruby extconf.rb --with-opt-include="../../include" --with-opt-lib="../../build-debug" --vendor
+          make CC=$CC CXX=$CXX CXXFLAGS="-std=c++17"
+
+      - name: Run Tests (Debug)
+        run: ctest --test-dir build-debug --output-on-failure -j $(getconf _NPROCESSORS_ONLN)
+
+      - name: Generate Coverage Report
+        if: matrix.coverage
+        run: |
+          lcov --capture --directory . --output-file coverage.info
+          lcov --remove coverage.info '/usr/*' --output-file coverage.info
+
+      - name: Upload Code Coverage
+        if: matrix.coverage
+        uses: coverallsapp/github-action@5cbfd81b66ca5d10c19b062c04de0199c215fb6e # v2.3.7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: coverage.info

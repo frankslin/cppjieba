@@ -13,7 +13,8 @@ class Jieba {
         const string& user_dict_path = "", 
         const string& idf_path = "", 
         const string& stop_word_path = "") 
-    : dict_trie_(getPath(dict_path, "jieba.dict.utf8"), getPath(user_dict_path, "user.dict.utf8")),
+    : dict_trie_(getPath(dict_path, "jieba.dict.utf8"),
+                 getPath(user_dict_path, "user.dict.utf8")),
       model_(getPath(model_path, "hmm_model.utf8")),
       mp_seg_(&dict_trie_),
       hmm_seg_(&model_),
@@ -22,6 +23,22 @@ class Jieba {
       query_seg_(&dict_trie_, &model_),
       extractor(&dict_trie_, &model_, 
                 getPath(idf_path, "idf.utf8"), 
+                getPath(stop_word_path, "stop_words.utf8")) {
+  }
+  Jieba(const DictTrie::PrecomputedDict& dict,
+        const string& model_path,
+        const string& user_dict_path,
+        const string& idf_path,
+        const string& stop_word_path)
+    : dict_trie_(dict, user_dict_path),
+      model_(getPath(model_path, "hmm_model.utf8")),
+      mp_seg_(&dict_trie_),
+      hmm_seg_(&model_),
+      mix_seg_(&dict_trie_, &model_),
+      full_seg_(&dict_trie_),
+      query_seg_(&dict_trie_, &model_),
+      extractor(&dict_trie_, &model_,
+                getPath(idf_path, "idf.utf8"),
                 getPath(stop_word_path, "stop_words.utf8")) {
   }
   ~Jieba() {

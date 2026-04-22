@@ -17,6 +17,7 @@
 #include "UnicodeFile.hpp"
 #include "Unicode.hpp"
 #include "Trie.hpp"
+#include "Ocd2Loader.hpp"
 
 namespace cppjieba {
 const size_t DICT_COLUMN_NUM = 3;
@@ -24,6 +25,17 @@ const char* const UNKNOWN_TAG = "";
 
 class DictTrie {
  public:
+  struct PrecomputedDict {
+    std::vector<DictUnit> node_infos;
+    std::unordered_set<Rune> single_char_user_words;
+    double freq_sum;
+    double min_weight;
+    double max_weight;
+    double median_weight;
+    PrecomputedDict(): freq_sum(0.0), min_weight(0.0), max_weight(0.0), median_weight(0.0) {
+    }
+  };
+
   enum UserWordWeightOption {
     WordWeightMin,
     WordWeightMedian,
@@ -33,6 +45,11 @@ class DictTrie {
   DictTrie(const std::string& dict_path, const std::string& user_dict_paths = "", UserWordWeightOption user_word_weight_opt = WordWeightMedian)
       : trie_(NULL) {
     Init(dict_path, user_dict_paths, user_word_weight_opt);
+  }
+
+  DictTrie(const PrecomputedDict& dict, const std::string& user_dict_paths = "", UserWordWeightOption user_word_weight_opt = WordWeightMedian)
+      : trie_(NULL) {
+    Init(dict, user_dict_paths, user_word_weight_opt);
   }
 
   ~DictTrie() {
@@ -170,6 +187,10 @@ class DictTrie {
   };
 
   void Init(const std::string& dict_path, const std::string& user_dict_paths, UserWordWeightOption user_word_weight_opt) {
+    if (detail::LooksLikeOcd2Dict(dict_path)) {
+      Init(detail::LoadOcd2Dict<PrecomputedDict>(dict_path), user_dict_paths, user_word_weight_opt);
+      return;
+    }
     const DictCacheEntry& cache = GetDictCache(dict_path);
     base_static_node_infos_ = cache.node_infos;
     base_encoded_words_ = cache.encoded_words;
@@ -177,6 +198,38 @@ class DictTrie {
     min_weight_ = cache.min_weight;
     max_weight_ = cache.max_weight;
     median_weight_ = cache.median_weight;
+    switch (user_word_weight_opt) {
+      case WordWeightMin:
+        user_word_default_weight_ = min_weight_;
+        break;
+      case WordWeightMedian:
+        user_word_default_weight_ = median_weight_;
+        break;
+      default:
+        user_word_default_weight_ = max_weight_;
+        break;
+    }
+
+    if (user_dict_paths.size()) {
+      AppendUserDict(user_dict_paths);
+    }
+    Shrink(static_node_infos_);
+    CreateTrie();
+  }
+
+  void Init(const PrecomputedDict& dict, const std::string& user_dict_paths, UserWordWeightOption user_word_weight_opt) {
+    base_static_node_infos_.reset(new std::vector<DictUnit>(dict.node_infos));
+    std::vector<std::string>* encoded_words = new std::vector<std::string>();
+    encoded_words->reserve(dict.node_infos.size());
+    for (size_t i = 0; i < dict.node_infos.size(); ++i) {
+      encoded_words->push_back(EncodeUTF8Word(dict.node_infos[i].word));
+    }
+    base_encoded_words_.reset(encoded_words);
+    user_dict_single_chinese_word_ = dict.single_char_user_words;
+    freq_sum_ = dict.freq_sum;
+    min_weight_ = dict.min_weight;
+    max_weight_ = dict.max_weight;
+    median_weight_ = dict.median_weight;
     switch (user_word_weight_opt) {
       case WordWeightMin:
         user_word_default_weight_ = min_weight_;

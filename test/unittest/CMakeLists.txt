@@ -39,4 +39,4 @@ ADD_EXECUTABLE(test.run
     unicode_path_test.cpp
 )
 
-TARGET_LINK_LIBRARIES(test.run gtest)
+TARGET_LINK_LIBRARIES(test.run gtest cppjieba)

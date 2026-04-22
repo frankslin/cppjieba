@@ -124,6 +124,20 @@ TEST(JiebaTest, WordTest) {
   ASSERT_EQ("[{\"word\": \"\xE4\xBB\x96\", \"offset\": 0}, {\"word\": \"\xE6\x9D\xA5\xE5\x88\xB0\", \"offset\": 3}, {\"word\": \"\xE4\xBA\x86\", \"offset\": 9}, {\"word\": \"\xE7\xBD\x91\xE6\x98\x93\", \"offset\": 12}, {\"word\": \"\xE6\x9D\xAD\xE7\xA0\x94\", \"offset\": 18}, {\"word\": \"\xE5\xA4\xA7\xE5\x8E\xA6\", \"offset\": 24}]", result);
 }
 
+TEST(JiebaTest, LoadMergedOcd2) {
+  cppjieba::Jieba jieba(MERGED_DICT_FILE,
+                        DICT_DIR "/hmm_model.utf8",
+                        "",
+                        DICT_DIR "/idf.utf8",
+                        DICT_DIR "/stop_words.utf8");
+  vector<string> words;
+  string result;
+
+  jieba.Cut("云计算和蓝翔", words, false);
+  result << words;
+  ASSERT_EQ("[\"云计算\", \"和\", \"蓝翔\"]", result);
+}
+
 TEST(JiebaTest, InsertUserWord) {
   cppjieba::Jieba jieba(DICT_DIR "/jieba.dict.utf8",
                         DICT_DIR "/hmm_model.utf8",

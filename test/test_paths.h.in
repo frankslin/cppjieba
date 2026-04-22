@@ -3,5 +3,6 @@
 
 #define TEST_DATA_DIR "@CMAKE_CURRENT_SOURCE_DIR@/testdata"
 #define DICT_DIR "@CMAKE_SOURCE_DIR@/dict"
+#define MERGED_DICT_FILE "@TEST_OCD2_FILE@"
 
-#endif // TEST_PATHS_H 
+#endif // TEST_PATHS_H
