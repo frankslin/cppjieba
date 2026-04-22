@@ -2,6 +2,7 @@
 #define CPPJIEBA_MIXSEGMENT_H
 
 #include <cassert>
+#include <cstddef>
 #include "MPSegment.hpp"
 #include "HMMSegment.hpp"
 #include "PosTagger.hpp"
@@ -36,6 +37,33 @@ class MixSegment: public SegmentTagged {
     while (pre_filter.HasNext()) {
       range = pre_filter.Next();
       Cut(sentence, range.begin, range.end, wrs, hmm);
+    }
+    words.clear();
+    words.reserve(wrs.size());
+    GetWordsFromWordRanges(sentence, wrs, words);
+  }
+
+  struct DebugStats {
+    size_t hmm_segments;
+    size_t hmm_runes;
+    DebugStats(): hmm_segments(0), hmm_runes(0) {
+    }
+  };
+
+  void Cut(const string& sentence, vector<string>& words, DebugStats* stats, bool hmm = true) const {
+    vector<Word> tmp;
+    Cut(sentence, tmp, stats, hmm);
+    GetStringsFromWords(tmp, words);
+  }
+
+  void Cut(const string& sentence, vector<Word>& words, DebugStats* stats, bool hmm = true) const {
+    PreFilter pre_filter(symbols_, sentence);
+    PreFilter::Range range;
+    vector<WordRange> wrs;
+    wrs.reserve(sentence.size() / 2);
+    while (pre_filter.HasNext()) {
+      range = pre_filter.Next();
+      Cut(sentence, range.begin, range.end, wrs, stats, hmm);
     }
     words.clear();
     words.reserve(wrs.size());
@@ -84,6 +112,9 @@ class MixSegment: public SegmentTagged {
     }
   }
   void Cut(const string& sentence, RuneStrArray::const_iterator begin, RuneStrArray::const_iterator end, vector<WordRange>& res, bool hmm) const {
+    Cut(sentence, begin, end, res, static_cast<DebugStats*>(NULL), hmm);
+  }
+  void Cut(const string& sentence, RuneStrArray::const_iterator begin, RuneStrArray::const_iterator end, vector<WordRange>& res, DebugStats* stats, bool hmm) const {
     if (!hmm) {
       mpSeg_.Cut(sentence, begin, end, res);
       return;
@@ -106,6 +137,10 @@ class MixSegment: public SegmentTagged {
         j++;
       }
 
+      if (stats != NULL) {
+        stats->hmm_segments++;
+        stats->hmm_runes += words[j - 1].right - words[i].left + 1;
+      }
       hmmSeg_.Cut(words[i].left, words[j - 1].left + 1, hmmRes);
       for (size_t k = 0; k < hmmRes.size(); k++) {
         res.push_back(hmmRes[k]);

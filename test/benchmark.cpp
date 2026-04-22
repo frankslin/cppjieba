@@ -138,6 +138,15 @@ std::string FormatLookupDetails(size_t iterations, size_t queries, size_t hits, 
   return oss.str();
 }
 
+std::string FormatMixDetails(size_t iterations, size_t bytes, size_t output_words,
+    double millis, const cppjieba::MixSegment::DebugStats& stats) {
+  std::ostringstream oss;
+  oss << FormatThroughputDetails(iterations, bytes, output_words, millis)
+      << " hmm_segments=" << stats.hmm_segments
+      << " hmm_runes=" << stats.hmm_runes;
+  return oss.str();
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -194,16 +203,17 @@ int main(int argc, char** argv) {
       FormatThroughputDetails(mp_cut_iterations, cut_doc.size(), mp_words, mp_cut_ms));
 
   size_t mix_words = 0;
+  MixSegment::DebugStats mix_stats;
   const double mix_cut_ms = MeasureMillis([&]() {
     std::vector<std::string> words;
     for (size_t i = 0; i < mix_cut_iterations; ++i) {
       words.clear();
-      mix_segment.Cut(cut_doc, words);
+      mix_segment.Cut(cut_doc, words, &mix_stats);
     }
     mix_words = words.size();
   });
   PrintMetric("MixCut", mix_cut_ms,
-      FormatThroughputDetails(mix_cut_iterations, cut_doc.size(), mix_words, mix_cut_ms));
+      FormatMixDetails(mix_cut_iterations, cut_doc.size(), mix_words, mix_cut_ms, mix_stats));
 
   size_t hits = 0;
   const double find_ms = MeasureMillis([&]() {
