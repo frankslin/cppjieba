@@ -62,6 +62,12 @@ class DictTrie {
     return trie_->Find(begin, end);
   }
 
+  const DictUnit* Find(const std::string& sentence,
+      RuneStrArray::const_iterator begin,
+      RuneStrArray::const_iterator end) const {
+    return trie_->Find(sentence, begin, end);
+  }
+
   void Find(RuneStrArray::const_iterator begin,
         RuneStrArray::const_iterator end,
         std::vector<struct Dag>&res,
@@ -69,23 +75,20 @@ class DictTrie {
     trie_->Find(begin, end, res, max_word_len);
   }
 
-  bool Find(const std::string& word)
-  {
-    const DictUnit *tmp = NULL;
-    RuneStrArray runes;
-    if (!DecodeUTF8RunesInString(word, runes))
-    {
-      XLOG(ERROR) << "Decode failed.";
-    }
-    tmp = Find(runes.begin(), runes.end());
-    if (tmp == NULL)
-    {
-      return false;
-    }
-    else
-    {
-      return true;
-    }
+  void Find(const std::string& sentence,
+        RuneStrArray::const_iterator begin,
+        RuneStrArray::const_iterator end,
+        std::vector<struct Dag>& res,
+        size_t max_word_len = MAX_WORD_LENGTH) const {
+    trie_->Find(sentence, begin, end, res, max_word_len);
+  }
+
+  bool Find(const std::string& word) {
+    return FindWord(word) != NULL;
+  }
+
+  const DictUnit* FindWord(const std::string& word) const {
+    return trie_->Find(word);
   }
 
   bool IsUserDictSingleChineseWord(const Rune& word) const {

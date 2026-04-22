@@ -35,7 +35,7 @@ class MixSegment: public SegmentTagged {
     wrs.reserve(sentence.size() / 2);
     while (pre_filter.HasNext()) {
       range = pre_filter.Next();
-      Cut(range.begin, range.end, wrs, hmm);
+      Cut(sentence, range.begin, range.end, wrs, hmm);
     }
     words.clear();
     words.reserve(wrs.size());
@@ -80,6 +80,37 @@ class MixSegment: public SegmentTagged {
       hmmRes.clear();
 
       //let i jump over this piece
+      i = j - 1;
+    }
+  }
+  void Cut(const string& sentence, RuneStrArray::const_iterator begin, RuneStrArray::const_iterator end, vector<WordRange>& res, bool hmm) const {
+    if (!hmm) {
+      mpSeg_.Cut(sentence, begin, end, res);
+      return;
+    }
+    vector<WordRange> words;
+    assert(end >= begin);
+    words.reserve(end - begin);
+    mpSeg_.Cut(sentence, begin, end, words);
+
+    vector<WordRange> hmmRes;
+    hmmRes.reserve(end - begin);
+    for (size_t i = 0; i < words.size(); i++) {
+      if (words[i].left != words[i].right || (words[i].left == words[i].right && mpSeg_.IsUserDictSingleChineseWord(words[i].left->rune))) {
+        res.push_back(words[i]);
+        continue;
+      }
+
+      size_t j = i;
+      while (j < words.size() && words[j].left == words[j].right && !mpSeg_.IsUserDictSingleChineseWord(words[j].left->rune)) {
+        j++;
+      }
+
+      hmmSeg_.Cut(words[i].left, words[j - 1].left + 1, hmmRes);
+      for (size_t k = 0; k < hmmRes.size(); k++) {
+        res.push_back(hmmRes[k]);
+      }
+      hmmRes.clear();
       i = j - 1;
     }
   }

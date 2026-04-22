@@ -39,7 +39,7 @@ class FullSegment: public SegmentBase {
     wrs.reserve(sentence.size()/2);
     while (pre_filter.HasNext()) {
       range = pre_filter.Next();
-      Cut(range.begin, range.end, wrs);
+      Cut(sentence, range.begin, range.end, wrs);
     }
     words.clear();
     words.reserve(wrs.size());
@@ -47,6 +47,12 @@ class FullSegment: public SegmentBase {
   }
   void Cut(RuneStrArray::const_iterator begin, 
         RuneStrArray::const_iterator end, 
+        vector<WordRange>& res) const {
+    Cut("", begin, end, res);
+  }
+  void Cut(const string& sentence,
+        RuneStrArray::const_iterator begin,
+        RuneStrArray::const_iterator end,
         vector<WordRange>& res) const {
     // result of searching in trie tree
     LocalVector<pair<size_t, const DictUnit*> > tRes;
@@ -61,7 +67,11 @@ class FullSegment: public SegmentBase {
     size_t wordLen = 0;
     assert(dictTrie_);
     vector<struct Dag> dags;
-    dictTrie_->Find(begin, end, dags);
+    if (sentence.empty()) {
+      dictTrie_->Find(begin, end, dags);
+    } else {
+      dictTrie_->Find(sentence, begin, end, dags);
+    }
     for (size_t i = 0; i < dags.size(); i++) {
       for (size_t j = 0; j < dags[i].nexts.size(); j++) {
         size_t nextoffset = dags[i].nexts[j].first;

@@ -39,7 +39,7 @@ class QuerySegment: public SegmentBase {
     wrs.reserve(sentence.size()/2);
     while (pre_filter.HasNext()) {
       range = pre_filter.Next();
-      Cut(range.begin, range.end, wrs, hmm);
+      Cut(sentence, range.begin, range.end, wrs, hmm);
     }
     words.clear();
     words.reserve(wrs.size());
@@ -64,6 +64,30 @@ class QuerySegment: public SegmentBase {
         for (size_t i = 0; i + 2 < mixResItr->Length(); i++) {
           WordRange wr(mixResItr->left + i, mixResItr->left + i + 2);
           if (trie_->Find(wr.left, wr.right + 1) != NULL) {
+            res.push_back(wr);
+          }
+        }
+      }
+      res.push_back(*mixResItr);
+    }
+  }
+  void Cut(const string& sentence, RuneStrArray::const_iterator begin, RuneStrArray::const_iterator end, vector<WordRange>& res, bool hmm) const {
+    vector<WordRange> mixRes;
+    mixSeg_.Cut(sentence, begin, end, mixRes, hmm);
+
+    for (vector<WordRange>::const_iterator mixResItr = mixRes.begin(); mixResItr != mixRes.end(); mixResItr++) {
+      if (mixResItr->Length() > 2) {
+        for (size_t i = 0; i + 1 < mixResItr->Length(); i++) {
+          WordRange wr(mixResItr->left + i, mixResItr->left + i + 1);
+          if (trie_->Find(sentence, wr.left, wr.right + 1) != NULL) {
+            res.push_back(wr);
+          }
+        }
+      }
+      if (mixResItr->Length() > 3) {
+        for (size_t i = 0; i + 2 < mixResItr->Length(); i++) {
+          WordRange wr(mixResItr->left + i, mixResItr->left + i + 2);
+          if (trie_->Find(sentence, wr.left, wr.right + 1) != NULL) {
             res.push_back(wr);
           }
         }

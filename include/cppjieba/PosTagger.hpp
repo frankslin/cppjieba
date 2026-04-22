@@ -29,7 +29,6 @@ class PosTagger {
   }
 
   string LookupTag(const string &str, const SegmentTagged& segment) const {
-    const DictUnit *tmp = NULL;
     RuneStrArray runes;
     const DictTrie * dict = segment.GetDictTrie();
     assert(dict != NULL);
@@ -37,7 +36,7 @@ class PosTagger {
         XLOG(ERROR) << "UTF-8 decode failed for word: " << str;
         return POS_X;
       }
-      tmp = dict->Find(runes.begin(), runes.end());
+      const DictUnit *tmp = dict->FindWord(str);
       if (tmp == NULL || tmp->tag.empty()) {
         return SpecialRule(runes);
       } else {

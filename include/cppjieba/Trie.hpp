@@ -65,6 +65,28 @@ class Trie {
     return value_pointers_[result];
   }
 
+  const DictUnit* Find(const string& str) const {
+    if (str.empty() || encoded_keys_.empty()) {
+      return NULL;
+    }
+    const int result = darts_.exactMatchSearch<int>(str.data(), str.size());
+    if (result < 0 || static_cast<size_t>(result) >= value_pointers_.size()) {
+      return NULL;
+    }
+    return value_pointers_[result];
+  }
+
+  const DictUnit* Find(const string& sentence,
+      RuneStrArray::const_iterator begin,
+      RuneStrArray::const_iterator end) const {
+    if (begin == end) {
+      return NULL;
+    }
+    const size_t offset = begin->offset;
+    const size_t length = (end - 1)->offset - begin->offset + (end - 1)->len;
+    return Find(sentence.data() + offset, length);
+  }
+
   void Find(RuneStrArray::const_iterator begin, 
         RuneStrArray::const_iterator end, 
         vector<struct Dag>&res, 
@@ -122,6 +144,69 @@ class Trie {
         if (j == i) {
           has_self = true;
         }
+      }
+
+      if (!has_self) {
+        res[i].nexts.push_back(pair<size_t, const DictUnit*>(i, static_cast<const DictUnit*>(NULL)));
+      }
+      for (size_t k = 0; k < nexts.size(); ++k) {
+        res[i].nexts.push_back(nexts[k]);
+      }
+    }
+  }
+
+  void Find(const string& sentence,
+        RuneStrArray::const_iterator begin,
+        RuneStrArray::const_iterator end,
+        vector<struct Dag>& res,
+        size_t max_word_len = MAX_WORD_LENGTH) const {
+    res.resize(end - begin);
+    if (begin == end) {
+      return;
+    }
+
+    vector<Darts::DoubleArray::result_pair_type> matches(max_word_len);
+    for (size_t i = 0; i < size_t(end - begin); ++i) {
+      res[i].runestr = *(begin + i);
+      res[i].nexts.clear();
+
+      const size_t rune_count = std::min(static_cast<size_t>(end - begin - i), max_word_len);
+      if (rune_count == 0 || encoded_keys_.empty()) {
+        res[i].nexts.push_back(pair<size_t, const DictUnit*>(i, static_cast<const DictUnit*>(NULL)));
+        continue;
+      }
+
+      const size_t begin_offset = (begin + i)->offset;
+      const RuneStr& last_rune = *(begin + i + rune_count - 1);
+      const size_t byte_length = last_rune.offset - begin_offset + last_rune.len;
+      const size_t match_count = darts_.commonPrefixSearch(
+          sentence.data() + begin_offset,
+          matches.data(),
+          rune_count,
+          byte_length);
+
+      bool has_self = false;
+      vector<pair<size_t, const DictUnit*> > nexts;
+      nexts.reserve(match_count > 0 ? match_count : 1);
+      size_t match_index = 0;
+      for (size_t local_j = 0; local_j < rune_count && match_index < match_count; ++local_j) {
+        const RuneStr& rune = *(begin + i + local_j);
+        const size_t rune_end_offset = rune.offset - begin_offset + rune.len;
+        while (match_index < match_count && matches[match_index].length < rune_end_offset) {
+          ++match_index;
+        }
+        if (match_index >= match_count || matches[match_index].length != rune_end_offset) {
+          continue;
+        }
+        const Darts::DoubleArray::result_pair_type& match = matches[match_index];
+        if (match.value >= 0 && static_cast<size_t>(match.value) < value_pointers_.size()) {
+          const size_t j = i + local_j;
+          nexts.push_back(pair<size_t, const DictUnit*>(j, value_pointers_[match.value]));
+          if (j == i) {
+            has_self = true;
+          }
+        }
+        ++match_index;
       }
 
       if (!has_self) {
@@ -222,6 +307,17 @@ class Trie {
       encoded.push_back(static_cast<char>(0x80 | ((rune >> 6) & 0x3F)));
       encoded.push_back(static_cast<char>(0x80 | (rune & 0x3F)));
     }
+  }
+
+  const DictUnit* Find(const char* data, size_t len) const {
+    if (len == 0 || encoded_keys_.empty()) {
+      return NULL;
+    }
+    const int result = darts_.exactMatchSearch<int>(data, len);
+    if (result < 0 || static_cast<size_t>(result) >= value_pointers_.size()) {
+      return NULL;
+    }
+    return value_pointers_[result];
   }
 
   Darts::DoubleArray darts_;
