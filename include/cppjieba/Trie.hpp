@@ -174,7 +174,6 @@ class Trie {
       return;
     }
 
-    vector<Darts::DoubleArray::result_pair_type> matches(max_word_len);
     for (size_t i = 0; i < size_t(end - begin); ++i) {
       res[i].runestr = *(begin + i);
       res[i].nexts.clear();
@@ -185,44 +184,36 @@ class Trie {
         continue;
       }
 
-      const size_t begin_offset = (begin + i)->offset;
-      const RuneStr& last_rune = *(begin + i + rune_count - 1);
-      const size_t byte_length = last_rune.offset - begin_offset + last_rune.len;
-      const size_t match_count = darts_.commonPrefixSearch(
-          sentence.data() + begin_offset,
-          matches.data(),
-          rune_count,
-          byte_length);
-
       bool has_self = false;
-      vector<pair<size_t, const DictUnit*> > nexts;
-      nexts.reserve(match_count > 0 ? match_count : 1);
-      size_t match_index = 0;
-      for (size_t local_j = 0; local_j < rune_count && match_index < match_count; ++local_j) {
+      size_t node_pos = 0;
+      for (size_t local_j = 0; local_j < rune_count; ++local_j) {
         const RuneStr& rune = *(begin + i + local_j);
-        const size_t rune_end_offset = rune.offset - begin_offset + rune.len;
-        while (match_index < match_count && matches[match_index].length < rune_end_offset) {
-          ++match_index;
+        const char* rune_bytes = sentence.data() + rune.offset;
+        int value = -1;
+        bool failed = false;
+        for (size_t byte_idx = 0; byte_idx < rune.len; ++byte_idx) {
+          size_t key_pos = 0;
+          value = darts_.traverse(rune_bytes + byte_idx, node_pos, key_pos, 1);
+          if (value == -2) {
+            failed = true;
+            break;
+          }
         }
-        if (match_index >= match_count || matches[match_index].length != rune_end_offset) {
-          continue;
+        if (failed) {
+          break;
         }
-        const Darts::DoubleArray::result_pair_type& match = matches[match_index];
-        if (match.value >= 0 && static_cast<size_t>(match.value) < value_pointers_.size()) {
+
+        if (value >= 0 && static_cast<size_t>(value) < value_pointers_.size()) {
           const size_t j = i + local_j;
-          nexts.push_back(pair<size_t, const DictUnit*>(j, value_pointers_[match.value]));
+          res[i].nexts.push_back(pair<size_t, const DictUnit*>(j, value_pointers_[value]));
           if (j == i) {
             has_self = true;
           }
         }
-        ++match_index;
       }
 
       if (!has_self) {
         res[i].nexts.push_back(pair<size_t, const DictUnit*>(i, static_cast<const DictUnit*>(NULL)));
-      }
-      for (size_t k = 0; k < nexts.size(); ++k) {
-        res[i].nexts.push_back(nexts[k]);
       }
     }
   }
