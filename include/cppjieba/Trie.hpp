@@ -47,6 +47,15 @@ class Trie {
       : value_pointers_(valuePointers) {
     CreateTrie(keys, valuePointers);
   }
+  Trie(const vector<string>& encodedKeys, const vector<const DictUnit*>& valuePointers)
+      : value_pointers_(valuePointers),
+        encoded_keys_(encodedKeys) {
+    CreateTrieFromEncoded();
+  }
+  explicit Trie(const vector<const DictUnit*>& valuePointers)
+      : value_pointers_(valuePointers) {
+    CreateTrie(valuePointers);
+  }
   ~Trie() {
   }
 
@@ -233,32 +242,91 @@ class Trie {
     }
     assert(keys.size() == valuePointers.size());
 
-    vector<pair<string, int> > items;
-    items.reserve(keys.size());
-    for (size_t i = 0; i < keys.size(); i++) {
-      items.push_back(make_pair(EncodeUnicode(keys[i]), static_cast<int>(i)));
-    }
-    std::sort(items.begin(), items.end());
-
     encoded_keys_.clear();
     key_ptrs_.clear();
     key_lengths_.clear();
     values_.clear();
-    encoded_keys_.reserve(items.size());
-    key_ptrs_.reserve(items.size());
-    key_lengths_.reserve(items.size());
-    values_.reserve(items.size());
+    encoded_keys_.reserve(keys.size());
+    values_.reserve(keys.size());
+    vector<size_t> order(keys.size());
+    for (size_t i = 0; i < keys.size(); ++i) {
+      encoded_keys_.push_back(EncodeUnicode(keys[i]));
+      values_.push_back(static_cast<int>(i));
+      order[i] = i;
+    }
+    SortAndBuild(order);
+  }
 
-    string last_key;
-    for (size_t i = 0; i < items.size(); ++i) {
-      if (!encoded_keys_.empty() && items[i].first == last_key) {
-        continue;
-      }
-      encoded_keys_.push_back(items[i].first);
-      last_key = items[i].first;
-      values_.push_back(items[i].second);
+  void CreateTrie(const vector<const DictUnit*>& valuePointers) {
+    if (valuePointers.empty()) {
+      return;
     }
 
+    encoded_keys_.clear();
+    values_.clear();
+    encoded_keys_.reserve(valuePointers.size());
+    values_.reserve(valuePointers.size());
+    vector<size_t> order(valuePointers.size());
+    for (size_t i = 0; i < valuePointers.size(); ++i) {
+      encoded_keys_.push_back(EncodeUnicode(valuePointers[i]->word));
+      values_.push_back(static_cast<int>(i));
+      order[i] = i;
+    }
+    SortAndBuild(order);
+  }
+
+  void CreateTrieFromEncoded() {
+    if (encoded_keys_.empty()) {
+      return;
+    }
+    values_.clear();
+    values_.reserve(encoded_keys_.size());
+    vector<size_t> order(encoded_keys_.size());
+    for (size_t i = 0; i < encoded_keys_.size(); ++i) {
+      values_.push_back(static_cast<int>(i));
+      order[i] = i;
+    }
+    SortAndBuild(order);
+  }
+
+  static string EncodeUnicode(const Unicode& unicode) {
+    return EncodeRunes(unicode.begin(), unicode.end());
+  }
+
+  struct EncodedKeyCompare {
+    explicit EncodedKeyCompare(const vector<string>& encoded_keys)
+        : encoded_keys_(encoded_keys) {
+    }
+
+    bool operator()(size_t lhs, size_t rhs) const {
+      return encoded_keys_[lhs] < encoded_keys_[rhs];
+    }
+
+   private:
+    const vector<string>& encoded_keys_;
+  };
+
+  void SortAndBuild(vector<size_t>& order) {
+    std::sort(order.begin(), order.end(), EncodedKeyCompare(encoded_keys_));
+
+    vector<string> sorted_keys;
+    vector<int> sorted_values;
+    sorted_keys.reserve(order.size());
+    sorted_values.reserve(order.size());
+
+    for (size_t i = 0; i < order.size(); ++i) {
+      const size_t index = order[i];
+      if (!sorted_keys.empty() && encoded_keys_[index] == sorted_keys.back()) {
+        continue;
+      }
+      sorted_keys.push_back(std::move(encoded_keys_[index]));
+      sorted_values.push_back(values_[index]);
+    }
+    encoded_keys_.swap(sorted_keys);
+    values_.swap(sorted_values);
+
+    key_ptrs_.reserve(encoded_keys_.size());
+    key_lengths_.reserve(encoded_keys_.size());
     for (size_t i = 0; i < encoded_keys_.size(); ++i) {
       key_ptrs_.push_back(encoded_keys_[i].data());
       key_lengths_.push_back(encoded_keys_[i].size());
@@ -267,10 +335,6 @@ class Trie {
     if (!encoded_keys_.empty()) {
       darts_.build(key_ptrs_.size(), key_ptrs_.data(), key_lengths_.data(), values_.data());
     }
-  }
-
-  static string EncodeUnicode(const Unicode& unicode) {
-    return EncodeRunes(unicode.begin(), unicode.end());
   }
 
   static string EncodeRunes(RuneStrArray::const_iterator begin, RuneStrArray::const_iterator end) {

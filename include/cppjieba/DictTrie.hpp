@@ -162,6 +162,7 @@ class DictTrie {
  private:
   struct DictCacheEntry {
     std::shared_ptr<const std::vector<DictUnit> > node_infos;
+    std::shared_ptr<const std::vector<std::string> > encoded_words;
     double freq_sum;
     double min_weight;
     double max_weight;
@@ -171,6 +172,7 @@ class DictTrie {
   void Init(const std::string& dict_path, const std::string& user_dict_paths, UserWordWeightOption user_word_weight_opt) {
     const DictCacheEntry& cache = GetDictCache(dict_path);
     base_static_node_infos_ = cache.node_infos;
+    base_encoded_words_ = cache.encoded_words;
     freq_sum_ = cache.freq_sum;
     min_weight_ = cache.min_weight;
     max_weight_ = cache.max_weight;
@@ -216,21 +218,21 @@ class DictTrie {
     trie_ = NULL;
     const size_t total_size = base_static_node_infos_->size() + static_node_infos_.size();
     assert(total_size);
-    std::vector<Unicode> words;
+    std::vector<std::string> encoded_words;
     std::vector<const DictUnit*> valuePointers;
-    words.reserve(total_size);
+    encoded_words.reserve(total_size);
     valuePointers.reserve(total_size);
 
     for (size_t i = 0; i < base_static_node_infos_->size(); i++) {
-      words.push_back((*base_static_node_infos_)[i].word);
+      encoded_words.push_back((*base_encoded_words_)[i]);
       valuePointers.push_back(&(*base_static_node_infos_)[i]);
     }
     for (size_t i = 0; i < static_node_infos_.size(); i++) {
-      words.push_back(static_node_infos_[i].word);
+      encoded_words.push_back(EncodeUTF8Word(static_node_infos_[i].word));
       valuePointers.push_back(&static_node_infos_[i]);
     }
 
-    trie_ = new Trie(words, valuePointers);
+    trie_ = new Trie(encoded_words, valuePointers);
   }
 
   void RebuildTrie() {
@@ -254,6 +256,7 @@ class DictTrie {
   static DictCacheEntry BuildDictCacheEntry(const std::string& filePath) {
     DictCacheEntry entry;
     std::vector<DictUnit> node_infos;
+    std::vector<std::string> encoded_words;
     std::ifstream ifs;
     OpenInputFile(ifs, filePath);
     XCHECK(ifs.is_open()) << "open " << filePath << " failed.";
@@ -267,6 +270,7 @@ class DictTrie {
       node_info.weight = atof(buf[1].c_str());
       node_info.tag = buf[2];
       node_infos.push_back(node_info);
+      encoded_words.push_back(buf[0]);
     }
     XCHECK(!node_infos.empty()) << "dict file is empty: " << filePath;
 
@@ -279,6 +283,7 @@ class DictTrie {
     entry.median_weight = sorted[sorted.size() / 2].weight;
 
     entry.node_infos = std::shared_ptr<const std::vector<DictUnit> >(new std::vector<DictUnit>(node_infos));
+    entry.encoded_words = std::shared_ptr<const std::vector<std::string> >(new std::vector<std::string>(encoded_words));
     return entry;
   }
 
@@ -321,7 +326,32 @@ class DictTrie {
     std::vector<DictUnit>(units.begin(), units.end()).swap(units);
   }
 
+  static std::string EncodeUTF8Word(const Unicode& unicode) {
+    std::string encoded;
+    encoded.reserve(unicode.size() * 3);
+    for (Unicode::const_iterator it = unicode.begin(); it != unicode.end(); ++it) {
+      Rune rune = *it;
+      if (rune <= 0x7F) {
+        encoded.push_back(static_cast<char>(rune));
+      } else if (rune <= 0x7FF) {
+        encoded.push_back(static_cast<char>(0xC0 | ((rune >> 6) & 0x1F)));
+        encoded.push_back(static_cast<char>(0x80 | (rune & 0x3F)));
+      } else if (rune <= 0xFFFF) {
+        encoded.push_back(static_cast<char>(0xE0 | ((rune >> 12) & 0x0F)));
+        encoded.push_back(static_cast<char>(0x80 | ((rune >> 6) & 0x3F)));
+        encoded.push_back(static_cast<char>(0x80 | (rune & 0x3F)));
+      } else {
+        encoded.push_back(static_cast<char>(0xF0 | ((rune >> 18) & 0x07)));
+        encoded.push_back(static_cast<char>(0x80 | ((rune >> 12) & 0x3F)));
+        encoded.push_back(static_cast<char>(0x80 | ((rune >> 6) & 0x3F)));
+        encoded.push_back(static_cast<char>(0x80 | (rune & 0x3F)));
+      }
+    }
+    return encoded;
+  }
+
   std::shared_ptr<const std::vector<DictUnit> > base_static_node_infos_;
+  std::shared_ptr<const std::vector<std::string> > base_encoded_words_;
   std::vector<DictUnit> static_node_infos_;
   Trie * trie_;
 
