@@ -15,5 +15,6 @@ tmp
 t.*
 *.pid
 build
+cppjieba_unicode_path_test/
 Testing/Temporary/CTestCostData.txt
 Testing/Temporary/LastTest.log

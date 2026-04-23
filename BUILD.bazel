@@ -8,9 +8,37 @@ filegroup(
 )
 
 cc_library(
+    name = "marisa",
+    srcs = glob(["deps/marisa-trie/lib/marisa/**/*.cc"]),
+    hdrs = glob(["deps/marisa-trie/include/**/*.h"]) + glob(["deps/marisa-trie/lib/marisa/**/*.h"]),
+    copts = [
+        "-Ideps/marisa-trie/include",
+        "-Ideps/marisa-trie/lib",
+    ],
+    includes = [
+        "deps/marisa-trie/include",
+        "deps/marisa-trie/lib",
+    ],
+)
+
+cc_library(
     name = "cppjieba",
-    hdrs = glob(["include/cppjieba/**/*.hpp"]),
-    includes = ["include"],
+    hdrs = glob([
+        "include/cppjieba/**/*.hpp",
+        "deps/darts-clone/include/**/*.h",
+        "deps/marisa-trie/include/**/*.h",
+    ]),
+    copts = [
+        "-Iinclude",
+        "-Ideps/darts-clone/include",
+        "-Ideps/marisa-trie/include",
+    ],
+    includes = [
+        "include",
+        "deps/darts-clone/include",
+        "deps/marisa-trie/include",
+    ],
+    deps = [":marisa"],
 )
 
 cc_test(

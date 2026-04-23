@@ -250,7 +250,7 @@ class DictTrie {
   }
 
   void AppendUserDict(const std::string& filePaths) {
-    std::vector<std::string> files = limonp::Split(filePaths, "|;");
+    std::vector<std::string> files = Split(filePaths, "|;");
     for (size_t i = 0; i < files.size(); i++) {
       std::ifstream ifs;
       OpenInputFile(ifs, files[i]);

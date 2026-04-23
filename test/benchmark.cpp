@@ -147,45 +147,36 @@ std::string FormatMixDetails(size_t iterations, size_t bytes, size_t output_word
   return oss.str();
 }
 
-}  // namespace
+struct BenchmarkConfig {
+  std::string label;
+  std::string dict_path;
+  std::string user_dict_path;
+};
 
-int main(int argc, char** argv) {
-  (void)argc;
-  (void)argv;
-
-  const std::string dict_path = DICT_DIR "/jieba.dict.utf8";
-  const std::string model_path = DICT_DIR "/hmm_model.utf8";
-  const std::string user_dict_path = DICT_DIR "/user.dict.utf8";
-  const std::string cut_doc = ReadFile(TEST_DATA_DIR "/synthetic_doc.utf8");
-  const std::vector<std::string> queries = LoadDictWords(dict_path, 50000);
-
-  if (cut_doc.empty()) {
-    std::cerr << "Failed to load benchmark document." << std::endl;
-    return 1;
-  }
-  if (queries.empty()) {
-    std::cerr << "Failed to load benchmark queries." << std::endl;
-    return 1;
-  }
-
+void RunBenchmarkSuite(const BenchmarkConfig& config,
+    const std::string& model_path,
+    const std::string& cut_doc,
+    const std::vector<std::string>& queries) {
   const size_t mp_cut_iterations = 200;
   const size_t mix_cut_iterations = 200;
   const size_t find_iterations = 20;
 
   double rss_before = GetCurrentRSSInMB();
   DictTrie* dict_trie = NULL;
-  const double dict_load_ms = MeasureMillis([&dict_trie, &dict_path, &user_dict_path]() {
-    dict_trie = new DictTrie(dict_path, user_dict_path);
+  const double dict_load_ms = MeasureMillis([&dict_trie, &config]() {
+    dict_trie = new DictTrie(config.dict_path, config.user_dict_path);
   });
   double rss_after_dict = GetCurrentRSSInMB();
-  PrintMetric("DictTrieLoad", dict_load_ms, FormatRSSDetails(rss_before, rss_after_dict));
+  PrintMetric("DictTrieLoad" + config.label, dict_load_ms,
+      FormatRSSDetails(rss_before, rss_after_dict));
 
   HMMModel* hmm_model = NULL;
   const double hmm_load_ms = MeasureMillis([&hmm_model, &model_path]() {
     hmm_model = new HMMModel(model_path);
   });
   double rss_after_hmm = GetCurrentRSSInMB();
-  PrintMetric("HMMModelLoad", hmm_load_ms, FormatRSSDetails(rss_after_dict, rss_after_hmm));
+  PrintMetric("HMMModelLoad" + config.label, hmm_load_ms,
+      FormatRSSDetails(rss_after_dict, rss_after_hmm));
 
   MPSegment mp_segment(dict_trie);
   MixSegment mix_segment(dict_trie, hmm_model);
@@ -199,7 +190,7 @@ int main(int argc, char** argv) {
     }
     mp_words = words.size();
   });
-  PrintMetric("MPCut", mp_cut_ms,
+  PrintMetric("MPCut" + config.label, mp_cut_ms,
       FormatThroughputDetails(mp_cut_iterations, cut_doc.size(), mp_words, mp_cut_ms));
 
   size_t mix_words = 0;
@@ -212,7 +203,7 @@ int main(int argc, char** argv) {
     }
     mix_words = words.size();
   });
-  PrintMetric("MixCut", mix_cut_ms,
+  PrintMetric("MixCut" + config.label, mix_cut_ms,
       FormatMixDetails(mix_cut_iterations, cut_doc.size(), mix_words, mix_cut_ms, mix_stats));
 
   size_t hits = 0;
@@ -225,10 +216,38 @@ int main(int argc, char** argv) {
       }
     }
   });
-  PrintMetric("DictFind", find_ms,
+  PrintMetric("DictFind" + config.label, find_ms,
       FormatLookupDetails(find_iterations, queries.size(), hits, find_ms));
 
   delete hmm_model;
   delete dict_trie;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  (void)argc;
+  (void)argv;
+
+  const std::string model_path = DICT_DIR "/hmm_model.utf8";
+  const std::string cut_doc = ReadFile(TEST_DATA_DIR "/synthetic_doc.utf8");
+  const std::vector<std::string> queries = LoadDictWords(DICT_DIR "/jieba.dict.utf8", 50000);
+
+  if (cut_doc.empty()) {
+    std::cerr << "Failed to load benchmark document." << std::endl;
+    return 1;
+  }
+  if (queries.empty()) {
+    std::cerr << "Failed to load benchmark queries." << std::endl;
+    return 1;
+  }
+
+  const BenchmarkConfig configs[] = {
+      {"Text", DICT_DIR "/jieba.dict.utf8", DICT_DIR "/user.dict.utf8"},
+      {"Ocd2", BENCHMARK_MERGED_DICT_FILE, ""},
+  };
+  for (size_t i = 0; i < sizeof(configs) / sizeof(configs[0]); ++i) {
+    RunBenchmarkSuite(configs[i], model_path, cut_doc, queries);
+  }
   return 0;
 }

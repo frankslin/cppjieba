@@ -2,6 +2,7 @@ SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR})
 
 set(TEST_OCD2_DIR "${CMAKE_CURRENT_BINARY_DIR}/testdata")
 set(TEST_OCD2_FILE "${TEST_OCD2_DIR}/jieba.dict.small.ocd2")
+set(BENCHMARK_OCD2_FILE "${TEST_OCD2_DIR}/jieba.dict.full.ocd2")
 
 add_custom_command(
     OUTPUT "${TEST_OCD2_FILE}"
@@ -18,6 +19,21 @@ add_custom_command(
 
 add_custom_target(test_ocd2_dict DEPENDS "${TEST_OCD2_FILE}")
 
+add_custom_command(
+    OUTPUT "${BENCHMARK_OCD2_FILE}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${TEST_OCD2_DIR}"
+    COMMAND $<TARGET_FILE:cppjieba_dict>
+            -i "${CMAKE_SOURCE_DIR}/dict/jieba.dict.utf8"
+            -i "${CMAKE_SOURCE_DIR}/dict/user.dict.utf8"
+            -o "${BENCHMARK_OCD2_FILE}"
+    DEPENDS cppjieba_dict
+            "${CMAKE_SOURCE_DIR}/dict/jieba.dict.utf8"
+            "${CMAKE_SOURCE_DIR}/dict/user.dict.utf8"
+    VERBATIM
+)
+
+add_custom_target(benchmark_ocd2_dict DEPENDS "${BENCHMARK_OCD2_FILE}")
+
 # Configure test paths
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/test_paths.h.in" "${CMAKE_BINARY_DIR}/test/test_paths.h")
 
@@ -30,6 +46,7 @@ ADD_EXECUTABLE(load_test load_test.cpp)
 ADD_EXECUTABLE(benchmark_bin benchmark.cpp)
 target_link_libraries(load_test PRIVATE cppjieba)
 target_link_libraries(benchmark_bin PRIVATE cppjieba)
+add_dependencies(benchmark_bin benchmark_ocd2_dict)
 if(WIN32)
     target_link_libraries(benchmark_bin Psapi)
 endif()
