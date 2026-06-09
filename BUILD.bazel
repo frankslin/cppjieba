@@ -12,6 +12,7 @@ cc_library(
     srcs = glob(["deps/marisa-trie/lib/marisa/**/*.cc"]),
     hdrs = glob(["deps/marisa-trie/include/**/*.h"]) + glob(["deps/marisa-trie/lib/marisa/**/*.h"]),
     copts = [
+        "-std=c++17",
         "-Ideps/marisa-trie/include",
         "-Ideps/marisa-trie/lib",
     ],
@@ -29,6 +30,7 @@ cc_library(
         "deps/marisa-trie/include/**/*.h",
     ]),
     copts = [
+        "-std=c++17",
         "-Iinclude",
         "-Ideps/darts-clone/include",
         "-Ideps/marisa-trie/include",
