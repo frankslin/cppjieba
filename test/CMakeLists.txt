@@ -48,7 +48,7 @@ target_link_libraries(load_test PRIVATE cppjieba)
 target_link_libraries(benchmark_bin PRIVATE cppjieba)
 add_dependencies(benchmark_bin benchmark_ocd2_dict)
 if(WIN32)
-    target_link_libraries(benchmark_bin Psapi)
+    target_link_libraries(benchmark_bin PRIVATE Psapi)
 endif()
 set_target_properties(benchmark_bin PROPERTIES OUTPUT_NAME benchmark_bin)
 ADD_CUSTOM_TARGET(benchmark
