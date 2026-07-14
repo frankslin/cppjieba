@@ -299,6 +299,20 @@ cppjieba::MixSegment seg(
     "dict/hmm_model.utf8");
 ```
 
+### 简/繁分词 demo
+
+`demo/segment_lang_demo.cpp` 演示如何通过“加载不同主词典”来分别处理简体与繁体
+（CppJieba 没有语言开关，选词典即选语言）：
+
+```bash
+# Bazel
+bazel run //demo:segment_lang_demo
+bazel run //demo:segment_lang_demo -- tc "繁體文字"
+
+# CMake（先 configure & build，需已 init submodule）
+cmake --build <build_dir> --target run_segment_lang_demo
+```
+
 转换说明：Rime 词表为两列 `词<TAB>词频`、无词性、且含大量 0 词频条目。
 转换工具会补齐词性列（`x`）、将 0 词频钳制为 `1`（`--drop-zero` 可改为丢弃），
 详见 `python3 tools/convert_rime_essay.py --help`。

@@ -74,6 +74,17 @@ if(EXISTS "${RIME_ESSAY_SOURCE}" AND Python3_Interpreter_FOUND)
     target_link_libraries(rime_essay_smoke_test PRIVATE cppjieba)
     add_dependencies(rime_essay_smoke_test rime_essay_dict)
     add_test(NAME rime_essay_smoke_test COMMAND rime_essay_smoke_test)
+
+    # SC/TC segmentation demo. Reuses this scope's test_paths.h include dir and
+    # the generated Traditional dictionary. Run it with:
+    #   cmake --build <build> --target run_segment_lang_demo
+    add_executable(segment_lang_demo "${CMAKE_SOURCE_DIR}/demo/segment_lang_demo.cpp")
+    target_link_libraries(segment_lang_demo PRIVATE cppjieba)
+    add_dependencies(segment_lang_demo rime_essay_dict)
+    add_custom_target(run_segment_lang_demo
+        COMMAND $<TARGET_FILE:segment_lang_demo>
+        DEPENDS segment_lang_demo
+        USES_TERMINAL)
 else()
     message(STATUS "Skipping rime_essay_smoke_test "
                    "(submodule third_party/rime-essay or Python3 not found)")

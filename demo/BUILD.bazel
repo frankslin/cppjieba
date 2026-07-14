@@ -1,0 +1,23 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# Demonstrates configuring CppJieba for Simplified vs Traditional Chinese by
+# loading different main dictionaries. Run it with:
+#   bazel run //demo:segment_lang_demo
+#   bazel run //demo:segment_lang_demo -- tc "繁體文字"
+#
+# The Traditional dictionary (//third_party:rime_essay_dict) is LGPL-3.0 and is
+# consumed here purely as runfiles `data`; see //third_party:README.md.
+cc_binary(
+    name = "segment_lang_demo",
+    srcs = ["segment_lang_demo.cpp"],
+    data = [
+        "//:dict",
+        "//third_party:rime_essay_dict",
+    ],
+    deps = [
+        "//:cppjieba",
+        "@bazel_tools//tools/cpp/runfiles",
+    ],
+)
