@@ -49,3 +49,15 @@ cc_test(
     data = [":dict"],
     deps = [":cppjieba"],
 )
+
+# Consumes the LGPL rime-essay dictionary as build-time `data`. The generated
+# dict lives only in bazel-out/; see //third_party:rime_essay_dict.
+cc_test(
+    name = "rime_essay_smoke_test",
+    srcs = ["test/rime_essay_smoke_test.cpp"],
+    data = [
+        ":dict",
+        "//third_party:rime_essay_dict",
+    ],
+    deps = [":cppjieba"],
+)

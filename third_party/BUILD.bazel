@@ -1,0 +1,31 @@
+package(default_visibility = ["//visibility:public"])
+
+# ---------------------------------------------------------------------------
+# rime-essay (Git submodule at third_party/rime-essay)
+#
+# LICENSING: essay.txt is GNU LGPL-3.0 (see rime-essay/LICENSE and AUTHORS),
+# NOT MIT. The genrule below transforms it into a CppJieba main dictionary.
+# That output is an LGPL-3.0 *derivative work*; it is produced only into
+# bazel-out/ and is never checked into this MIT repository. See
+# third_party/README.md for full attribution and compliance notes.
+#
+# There is no BUILD file inside rime-essay/, so its files belong to this
+# //third_party package and are referenced by their relative paths here.
+# ---------------------------------------------------------------------------
+
+exports_files([
+    "rime-essay/essay.txt",
+    "rime-essay/LICENSE",
+    "rime-essay/AUTHORS",
+])
+
+# Build-time conversion: rime essay.txt (word<TAB>freq) -> jieba main dict
+# (word freq pos). The generated file is LGPL-3.0 (derivative of essay.txt).
+genrule(
+    name = "rime_essay_dict",
+    srcs = ["rime-essay/essay.txt"],
+    outs = ["jieba.rime-essay.dict.utf8"],
+    cmd = "python3 $(location //tools:convert_rime_essay.py) " +
+          "--input $(location rime-essay/essay.txt) --output $@",
+    tools = ["//tools:convert_rime_essay.py"],
+)

@@ -248,6 +248,61 @@ For more details, please see [demo](https://github.com/yanyiwu/cppjieba-demo).
 ["我:r", "是:v", "蓝翔:nz", "技工:n", "拖拉机:n", "学院:n", "手扶拖拉机:n", "专业:n", "的:uj", "。:x", "不用:v", "多久:m", "，:x", "我:r", "就:d", "会:v", "升职:v", "加薪:nr", "，:x", "当:t", "上:f", "总经理:n", "，:x", "出任:v", "CEO:eng", "，:x", "迎娶:v", "白富美:x", "，:x", "走上:v", "人生:n", "巅峰:n", "。:x"]
 ```
 
+## 繁体词典（可选，LGPL）
+
+默认主词典 `dict/jieba.dict.utf8` 以简体中文为主，对繁体输入分词效果有限。
+仓库通过 Git submodule 引入了 [Rime essay](https://github.com/frankslin/rime-essay)
+繁体词表，可转换为 jieba 主词典格式后按需使用。
+
+> ⚠️ **许可证注意**：`essay.txt` 及其转换产物为 **LGPL-3.0** 衍生作品，
+> **不受** CppJieba 的 MIT 许可证覆盖。详见 [`third_party/README.md`](third_party/README.md)。
+> 该词典默认输出到 submodule 目录内，不会进入 MIT 主仓库的 Git 历史。
+
+先拉取 submodule 数据（LGPL）：
+
+```bash
+git submodule update --init third_party/rime-essay
+```
+
+**转换脚本本身是 MIT，转换结果是 essay.txt 的 LGPL 衍生作品。** 该衍生词典只在
+构建产物中生成，不进入 MIT 主仓库，也不弄脏 submodule 工作树。
+
+### Bazel（推荐）
+
+转换由 genrule 完成，输出只落在 `bazel-out/`；cppjieba 以 `data` 形式消费：
+
+```bash
+# 生成词典（LGPL 产物，仅存在于 bazel-out/）
+bazel build //third_party:rime_essay_dict
+#   → bazel-bin/third_party/jieba.rime-essay.dict.utf8
+
+# 冒烟测试：用该词典分词繁体中文
+bazel test //:rime_essay_smoke_test
+```
+
+在自己的 Bazel target 中把 `//third_party:rime_essay_dict` 加进 `data` 即可。
+
+### 非 Bazel（CMake/Make）
+
+直接跑转换脚本，产物写到 **gitignored** 的 `third_party/generated/` 目录：
+
+```bash
+python3 tools/convert_rime_essay.py
+#   → third_party/generated/jieba.rime-essay.dict.utf8
+```
+
+之后在构造分词器时指向该词典即可（HMM/IDF/停用词仍复用 `dict/` 下的文件）：
+
+```cpp
+cppjieba::MixSegment seg(
+    "third_party/generated/jieba.rime-essay.dict.utf8",  // 或 bazel-bin/ 下的产物
+    "dict/hmm_model.utf8");
+```
+
+转换说明：Rime 词表为两列 `词<TAB>词频`、无词性、且含大量 0 词频条目。
+转换工具会补齐词性列（`x`）、将 0 词频钳制为 `1`（`--drop-zero` 可改为丢弃），
+详见 `python3 tools/convert_rime_essay.py --help`。
+
 ## 其它词典资料分享
 
 + [dict.367W.utf8] iLife(562193561 at qq.com)

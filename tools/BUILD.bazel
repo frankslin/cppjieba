@@ -1,0 +1,7 @@
+package(default_visibility = ["//visibility:public"])
+
+# MIT-licensed conversion script (see repository LICENSE). It contains no
+# rime-essay data; it only transforms it at build time. Exported so the
+# //third_party genrule can invoke it with the host python3 interpreter,
+# avoiding a rules_python dependency for this minimal module.
+exports_files(["convert_rime_essay.py"])
